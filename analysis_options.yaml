@@ -1,29 +1,349 @@
-# This file configures the analyzer, which statically analyzes Dart code to
-# check for errors, warnings, and lints.
-#
-# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
+<?php
 
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
-include: package:flutter_lints/flutter.yaml
 
-linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at
-  # https://dart-lang.github.io/linter/lints/index.html.
-  #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
-  rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+namespace MoSfSyncSalesforce\Integrations\BuddyBossIntegration;
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+use MoSfSyncSalesforce\Helper\Instance;
+use MoSfSyncSalesforce\Services\DBUtils;
+use MoSfSyncSalesforce\API\Salesforce;
+use MoSfSyncSalesforce\Handler\AjaxHandler;
+use MoSfSyncSalesforce\Handler\Object_Sync_Sf_WordPress;
+use MoSfSyncSalesforce\Helper\PluginConstants;
+use MoSfSyncSalesforce\Services\AuditDB;
+use MoSfSyncSalesforce\Handler\Wp_to_SfTransformation;
+use WP_REST_Request;
+require_once WP_PLUGIN_DIR . "\57\142\165\x64\144\x79\160\x72\145\x73\163\57\x62\160\x2d\170\160\x72\x6f\146\151\x6c\145\57\x62\x70\55\170\x70\x72\x6f\146\151\154\x65\x2d\164\x65\155\160\154\141\x74\x65\x2e\160\x68\160";
+require_once WP_PLUGIN_DIR . "\57\x62\165\144\144\171\160\x72\x65\163\163\57\142\160\x2d\155\145\155\142\x65\x72\163\x2f\142\160\x2d\x6d\145\x6d\142\x65\162\163\x2d\x66\x75\x6e\143\164\151\157\x6e\163\x2e\160\150\x70";
+class BuddyBossIntegration
+{
+    use Instance;
+    private $sf;
+    private $db;
+    private $audit;
+    private $bboss_db;
+    private $ajax_handler;
+    private $bboss_data_template;
+    private $bboss_fields_table;
+    private $object_sync_sf_wp;
+    private $enable_audit_logs;
+    private $bboss_permitted_wp_object;
+    private $bpress_permitted_group_wp_object;
+    private $bp_group_standard_table;
+    private $bp_group_meta_table;
+    public static function instance()
+    {
+        global $wpdb;
+        self::$_instance = new self();
+        self::$_instance->sf = new Salesforce();
+        self::$_instance->db = new DBUtils();
+        self::$_instance->audit = AuditDB::instance();
+        self::$_instance->bboss_db = $wpdb;
+        self::$_instance->ajax_handler = AjaxHandler::instance();
+        self::$_instance->bboss_fields_table = "\142\x70\x5f\x78\160\162\x6f\x66\151\154\x65\137\146\x69\145\x6c\144\x73";
+        self::$_instance->bboss_permitted_wp_object = "\165\x73\145\x72";
+        self::$_instance->enable_audit_logs = get_site_option("\x6d\x6f\x5f\x73\x66\137\163\171\x6e\143\137\x65\156\141\x62\154\x65\137\x61\165\144\x69\164\137\154\x6f\x67\x73");
+        self::$_instance->object_sync_sf_wp = new Object_Sync_Sf_WordPress();
+        if (!class_exists("\102\120\x5f\x58\x50\162\x6f\146\151\x6c\x65\x5f\x44\x61\164\141\x5f\x54\x65\155\160\x6c\141\x74\x65")) {
+            goto Kn;
+        }
+        self::$_instance->bboss_data_template = new \BP_XProfile_Data_Template();
+        Kn:
+        if (!file_exists(WP_PLUGIN_DIR . "\x2f\x62\x75\x64\x64\x79\x70\x72\145\x73\163\57\x62\160\x2d\x67\162\x6f\165\160\163\57\x62\x70\55\x67\x72\157\x75\160\163\55\x66\165\156\x63\164\x69\x6f\156\x73\x2e\x70\150\160")) {
+            goto Ue;
+        }
+        self::$_instance->bpress_permitted_group_wp_object = "\x62\160\x5f\x67\162\x6f\165\160";
+        self::$_instance->bp_group_standard_table = "\x62\160\137\x67\x72\x6f\x75\x70\x73";
+        self::$_instance->bp_group_meta_table = "\142\160\137\x67\162\x6f\165\x70\163\137\x67\x72\157\165\160\155\x65\164\x61";
+        Ue:
+        return self::$_instance;
+    }
+    public function mo_sf_sync_get_buddyboss_extended_profile_fields($Ld, $tc)
+    {
+        if (!($tc !== $this->bboss_permitted_wp_object)) {
+            goto oE;
+        }
+        return $Ld;
+        oE:
+        $G1 = $this->mo_sf_sync_get_buddypress_profile_groups();
+        $B1 = array();
+        $Sl = 0;
+        foreach ($G1 as $we => $b4) {
+            $Ml = $b4->fields;
+            foreach ($Ml as $D4) {
+                $B1["\x64\x61\x74\141"][$Sl]["\164\141\142\154\x65"] = $this->bboss_fields_table;
+                $B1["\144\141\164\x61"][$Sl]["\x74\x79\160\145"] = $D4->type;
+                $B1["\x64\141\164\141"][$Sl]["\x6b\x65\171"] = $D4->name;
+                $B1["\x64\141\164\x61"][$Sl]["\166\141\x6c\x75\145"] = $D4->id;
+                $B1["\144\141\164\x61"][$Sl]["\156\x61\x6d\x65"] = $D4->name;
+                $Sl++;
+                PL:
+            }
+            at:
+            WC:
+        }
+        SH:
+        $Ld["\144\x61\x74\141"] = array_merge($Ld["\x64\141\x74\141"], $B1["\x64\x61\x74\x61"]);
+        return $Ld;
+    }
+    public function mo_sf_sync_prepare_buddyboss_profile_data_for_sync($uv)
+    {
+        $in = $this->db->mo_sf_sync_get_all_wp_to_sf_mappings($this->bboss_permitted_wp_object);
+        if (!empty($in)) {
+            goto uY;
+        }
+        return;
+        uY:
+        $q6 = $this->object_sync_sf_wp->get_wordpress_table_structure($this->bboss_permitted_wp_object);
+        $Pu = $this->ajax_handler->mo_sf_sync_get_mapping($uv, $in[0], $q6, $ls = "\165\x73\145\162");
+        $qq = $this->mo_sf_sync_prepare_buddypress_sync_payload($uv, $in[0], $Pu, $q6, $ls);
+        $Pu["\x62\x6f\144\171"] = array_merge($Pu["\142\x6f\144\171"], $qq);
+        $DJ = $this->mo_sf_sync_fetch_sfid_if_exists($uv, $q6, $in[0]);
+        $k7 = $in[0]->updation;
+        $fW = $in[0]->creation;
+        if (!empty($DJ)) {
+            goto Ez;
+        }
+        if (!($fW == 1)) {
+            goto Gx;
+        }
+        return $this->ajax_handler->mo_sf_sync_create_record_in_salesforce($Pu, $uv, $q6, $ls);
+        Gx:
+        goto hi;
+        Ez:
+        if (!($k7 == 1)) {
+            goto BK;
+        }
+        $qI = $this->sf->mo_sf_sync_update_record($DJ, $Pu["\157\142\152\145\x63\x74"], $Pu["\142\x6f\x64\171"]);
+        BK:
+        if (!(is_array($qI) && count($qI) && isset($qI[0]["\145\x72\x72\157\x72\103\x6f\x64\x65"]))) {
+            goto rO;
+        }
+        if (!($qI[0]["\x65\162\x72\157\162\103\x6f\x64\145"] === "\x45\x4e\x54\x49\x54\131\x5f\111\x53\137\x44\x45\x4c\105\x54\105\104")) {
+            goto Ys;
+        }
+        return $this->ajax_handler->mo_sf_sync_create_record_in_salesforce($Pu, $uv, $q6, $ls);
+        Ys:
+        rO:
+        if (!($this->enable_audit_logs && $k7 == 1)) {
+            goto OK;
+        }
+        if (is_array($qI) && count($qI) && isset($qI[0]["\145\x72\162\x6f\x72\103\x6f\x64\145"])) {
+            goto Eo;
+        }
+        $this->audit->mo_sf_sync_add_log(PluginConstants::WPTOSF, $DJ, $uv, "\x55\160\x64\141\x74\145", "\x53\x75\143\x63\145\163\163", "\x53\x79\x6e\x63\40\x53\x75\143\143\145\x73\x73\x66\165\154\x20\x77\x69\164\x68\x20" . $Pu["\x6f\142\152\x65\143\x74"], $ls);
+        goto dB;
+        Eo:
+        $this->audit->mo_sf_sync_add_log(PluginConstants::WPTOSF, $DJ, $uv, "\x55\x70\x64\141\x74\x65", "\x46\x61\151\x6c\x65\x64", $qI[0]["\x6d\x65\163\163\x61\147\145"], $ls);
+        dB:
+        OK:
+        return $qI;
+        hi:
+    }
+    public function mo_sf_sync_prepare_buddypress_sync_payload($uv, $in, $Pu, $q6, $ls)
+    {
+        $gB = maybe_unserialize($in->fields)["\x66\x69\145\x6c\144\x5f\x6d\x61\x70\x70\x69\x6e\x67"];
+        $xP = maybe_unserialize($in->fields)["\x66\x69\145\154\144\137\x6d\x61\x70\160\x69\x6e\x67\137\x74\x79\160\145"];
+        foreach ($gB as $OB => $eb) {
+            if (array_key_exists($OB, $Pu)) {
+                goto Ye;
+            }
+            $Fz[$OB] = $eb;
+            Ye:
+            aV:
+        }
+        J8:
+        $a8 = array_map(function ($tL) {
+            return str_replace("\137", "\x20", $tL);
+        }, $Fz);
+        $qq = array();
+        foreach ($a8 as $OB => $VC) {
+            $io = \xprofile_get_field_id_from_name($VC);
+            if (!empty($io)) {
+                goto JD;
+            }
+            goto wr;
+            JD:
+            $Ln = \xprofile_get_field_data($VC, $uv);
+            if (empty($Ln)) {
+                goto AW;
+            }
+            $qq[$OB] = Wp_to_SfTransformation::mo_sf_sync_pick_transformation($xP[$OB], $Ln);
+            if (!(empty($qq[$OB]) && $xP[$OB] === "\144\x61\164\145")) {
+                goto xG;
+            }
+            unset($qq[$OB]);
+            xG:
+            AW:
+            wr:
+        }
+        YD:
+        return $qq;
+    }
+    public function mo_sf_sync_get_buddypress_profile_groups()
+    {
+        return bp_profile_get_field_groups();
+    }
+    public function mo_sf_sync_fetch_sfid_if_exists($uv, $q6, $in)
+    {
+        $fY = $q6["\155\145\x74\141\x5f\155\145\x74\150\157\x64\163"]["\x72\145\x61\144"];
+        if (!(isset($in->nomenclature) && !empty($in->nomenclature))) {
+            goto EA;
+        }
+        return $fY($uv, $in->nomenclature, true);
+        EA:
+        return $fY($uv, "\x73\x61\x6c\145\163\146\x6f\x72\x63\145\137" . $in->salesforce_object . "\x5f\111\104", true);
+    }
+    public function mo_sf_sync_get_buddypress_group_fields()
+    {
+        global $wpdb;
+        $xE = $wpdb->get_results("\x53\110\x4f\127\40\x43\x4f\114\125\115\116\123\x20\106\122\x4f\x4d\x20{$wpdb->prefix}\142\x70\x5f\147\162\x6f\x75\160\163");
+        $bG = [];
+        foreach ($xE as $vx) {
+            $bG[] = ["\x6b\x65\171" => $vx->Field, "\x74\141\142\x6c\x65" => $wpdb->prefix . "\142\160\x5f\x67\x72\x6f\x75\x70\163", "\x74\171\x70\145" => $vx->Type, "\145\x64\151\x74\141\142\x6c\145" => false];
+            Wl:
+        }
+        DL:
+        $Q7 = $wpdb->get_col($wpdb->prepare("\x53\105\x4c\105\x43\x54\40\x44\111\123\x54\111\x4e\103\x54\x20\x6d\x65\164\141\x5f\x6b\145\x79\40\xd\12\x9\x9\11\x46\x52\x4f\x4d\40{$wpdb->prefix}\x62\x70\137\x67\162\157\165\x70\163\x5f\x67\x72\157\x75\x70\x6d\x65\x74\x61\15\12\11\x9\11\x57\x48\105\122\x45\40\155\x65\x74\141\137\x6b\145\x79\x20\x21\75\x20\45\x73", ''));
+        $mZ = [];
+        foreach ($Q7 as $D0) {
+            $mZ[] = ["\x6b\145\171" => $D0, "\164\x61\142\x6c\x65" => $wpdb->prefix . "\x62\160\137\x67\x72\x6f\165\x70\x73\137\x67\x72\x6f\165\x70\x6d\x65\164\141", "\164\171\160\x65" => "\154\x6f\x6e\x67\164\145\170\164", "\x65\x64\x69\164\141\x62\x6c\x65" => true];
+            KE:
+        }
+        YE:
+        $s4 = array_merge($bG, $mZ);
+        return ["\144\141\164\141" => $s4];
+    }
+    public function mo_sf_sync_buddypress_group_fields($Ld, $tc)
+    {
+        if (!($tc !== $this->bpress_permitted_group_wp_object)) {
+            goto DI;
+        }
+        return $Ld;
+        DI:
+        $cA = $this->mo_sf_sync_get_buddypress_group_fields();
+        return $cA;
+    }
+    public function mo_sf_sync_initiate_synchronization_of_buddypress_group($rL, $IZ = null)
+    {
+        $in = $this->db->mo_sf_sync_get_all_wp_to_sf_mappings($this->bpress_permitted_group_wp_object);
+        if (!empty($in)) {
+            goto HP;
+        }
+        return;
+        HP:
+        $p1 = $this->mo_sf_sync_prepare_group_payload($rL, $in, $this->bpress_permitted_group_wp_object);
+        $oP = groups_get_groupmeta($rL, $p1["\156\157\x6d\145\156\143\x6c\x61\164\x75\162\145"]);
+        if (empty($oP)) {
+            goto av;
+        }
+        $qI = $this->sf->mo_sf_sync_update_record($oP, $p1["\x6f\x62\152\x65\143\x74"], $p1["\x62\x6f\144\171"]);
+        if (!($this->enable_audit_logs && $in[0]->updation == 1)) {
+            goto nP;
+        }
+        if (is_array($qI) && count($qI) && isset($qI[0]["\145\x72\162\157\x72\x43\157\x64\145"])) {
+            goto vh;
+        }
+        $this->audit->mo_sf_sync_add_log(PluginConstants::WPTOSF, $oP, $rL, "\x55\160\x64\141\164\145", "\123\x75\143\143\x65\x73\163", "\x53\171\x6e\x63\40\123\165\x63\x63\145\x73\163\146\x75\x6c\x20\167\x69\164\150\40" . $p1["\x6f\142\152\145\143\164"], $this->bpress_permitted_group_wp_object);
+        goto AQ;
+        vh:
+        $this->audit->mo_sf_sync_add_log(PluginConstants::WPTOSF, $oP, $rL, "\125\x70\144\x61\164\x65", "\106\141\151\x6c\x65\x64", $qI[0]["\x6d\145\163\x73\141\147\x65"], $this->bpress_permitted_group_wp_object);
+        AQ:
+        nP:
+        goto D7;
+        av:
+        $this->mo_sf_sync_create_groups_sync($p1, $rL, $this->bpress_permitted_group_wp_object, $p1);
+        D7:
+    }
+    public function mo_sf_sync_create_groups_sync($p1, $rL, $i8, $fM)
+    {
+        if (isset($fM)) {
+            goto xs;
+        }
+        wp_send_json_success(array(["\155\145\163\x73\x61\147\145" => "\123\157\x6d\x65\164\150\x69\156\x67\x20\167\145\x6e\164\x20\167\x72\x6f\x6e\147\x20\160\162\x6f\x63\x65\163\x73\x69\156\x67\40\x74\150\145\40\162\145\x71\x75\145\x73\164\41"]));
+        return;
+        xs:
+        $qI = $this->sf->mo_sf_sync_create_record($fM["\157\142\152\145\143\164"], $fM["\142\x6f\x64\x79"]);
+        if (!isset($qI["\151\144"])) {
+            goto AX;
+        }
+        if (isset($fM["\x6e\x6f\155\x65\x6e\x63\x6c\x61\164\165\x72\145"]) && !empty($fM["\156\157\x6d\x65\x6e\143\x6c\141\164\x75\162\x65"])) {
+            goto c_;
+        }
+        groups_update_groupmeta($rL, "\163\141\x6c\145\x73\x66\x6f\162\x63\x65\137" . $fM["\x6f\142\152\x65\x63\x74"] . "\x5f\x49\x44", sanitize_text_field($qI["\151\144"]));
+        goto ss;
+        c_:
+        groups_update_groupmeta($rL, $fM["\x6e\157\155\145\156\143\x6c\x61\x74\x75\162\x65"], sanitize_text_field($qI["\x69\144"]));
+        ss:
+        AX:
+        if (!$this->enable_audit_logs) {
+            goto d4;
+        }
+        if (isset($qI[0]["\x65\162\x72\x6f\x72\103\x6f\x64\145"])) {
+            goto Fv;
+        }
+        if (!isset($qI["\151\x64"])) {
+            goto mp;
+        }
+        $this->audit->mo_sf_sync_add_log(PluginConstants::WPTOSF, $qI["\151\x64"], $rL, "\103\162\x65\x61\x74\145", "\x53\x75\143\143\x65\x73\x73", "\x53\x79\x6e\x63\40\x53\165\143\x63\145\x73\163\x66\x75\154\x20\x77\x69\164\150\x20" . $fM["\157\x62\152\x65\x63\164"], $this->bpress_permitted_group_wp_object);
+        mp:
+        goto cP;
+        Fv:
+        $this->audit->mo_sf_sync_add_log(PluginConstants::WPTOSF, "\103\x72\145\x61\x74\x69\157\156\40\106\x61\x69\154\x65\x64", $rL, "\x43\x72\x65\141\x74\145", "\106\x61\x69\154\145\144", $qI[0]["\x6d\145\x73\163\x61\147\x65"], $this->bpress_permitted_group_wp_object);
+        cP:
+        d4:
+        return $qI;
+    }
+    public function mo_sf_sync_prepare_group_payload($rL, $in, $GT)
+    {
+        $cj = maybe_unserialize($in[0]->fields)["\x66\151\x65\154\144\x5f\x6d\x61\x70\x70\x69\x6e\147"];
+        $Im = maybe_unserialize($in[0]->fields)["\143\x75\163\164\157\x6d\137\146\x69\145\x6c\x64\x5f\155\x61\x70\x70\151\x6e\x67"];
+        $PE = maybe_unserialize($in[0]->fields)["\146\x69\x65\154\144\137\155\x61\160\x70\x69\156\x67\137\x74\171\160\145"];
+        if (!(empty($cj) && empty($Im))) {
+            goto C7;
+        }
+        return null;
+        C7:
+        $IZ = groups_get_group(array("\147\162\x6f\165\x70\137\x69\144" => $rL));
+        $p1 = array();
+        foreach ($cj as $ZX => $VA) {
+            if (!empty($VA)) {
+                goto ah;
+            }
+            goto gX;
+            ah:
+            $m5 = null;
+            if (isset($IZ->{$VA}) && !empty($IZ->{$VA})) {
+                goto zA;
+            }
+            if (!empty($eU = groups_get_groupmeta($rL, $VA))) {
+                goto CA;
+            }
+            goto vu;
+            zA:
+            $m5 = $IZ->{$VA};
+            goto vu;
+            CA:
+            $m5 = $eU;
+            vu:
+            if (empty($m5)) {
+                goto K4;
+            }
+            $wO = Wp_to_SfTransformation::mo_sf_sync_pick_transformation($PE[$ZX], $m5);
+            $p1[$ZX] = $wO;
+            if (!(isset($p1[$ZX]) && $PE[$ZX] == "\x64\141\x74\145")) {
+                goto dP;
+            }
+            unset($p1[$ZX]);
+            dP:
+            K4:
+            gX:
+        }
+        aX:
+        if (!(isset($Im) && !empty($Im))) {
+            goto jJ;
+        }
+        $p1 = array_merge($p1, $Im);
+        jJ:
+        return array("\157\x62\x6a\x65\143\x74" => $in[0]->salesforce_object, "\156\x6f\x6d\145\x6e\143\154\x61\x74\x75\162\145" => $in[0]->nomenclature, "\143\162\145\141\164\151\x6f\156" => $in[0]->creation, "\165\x70\144\x61\x74\x69\x6f\156" => $in[0]->updation, "\x62\157\144\171" => $p1);
+    }
+}
